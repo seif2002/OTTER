@@ -3,6 +3,10 @@
 #include <iostream>
 #include <fstream> //03
 #include <string> //03
+#include <GLM/glm.hpp> // Lec 04
+#include <GLM/gtc/matrix_transform.hpp> //lec 04
+
+
 
 GLFWwindow* window;
 
@@ -13,7 +17,7 @@ bool initGLFW() {
 	}
 
 	//Create a new GLFW window
-	window = glfwCreateWindow(800, 800, "seif helaly, 100790340", nullptr, nullptr);
+	window = glfwCreateWindow(800, 800, "INFR1350U", nullptr, nullptr);
 	glfwMakeContextCurrent(window);
 
 	return true;
@@ -25,9 +29,6 @@ bool initGLAD() {
 		return false;
 	}
 }
-
-
-
 
 
 GLuint shader_program;
@@ -78,6 +79,28 @@ bool loadShaders() {
 }
 
 
+//// Lecture 04
+
+GLfloat rotZ = 0.0f;
+GLfloat movZ = 0.5f;
+void keyboard() {
+
+	if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+		rotZ += 0.1f;
+	if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+		rotZ -= 0.1f;
+
+	if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+		movZ += 0.05f;
+	if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+		movZ -= 0.05f;
+
+
+}
+
+///////////////
+
+
 int main() {
 	//Initialize GLFW
 	if (!initGLFW())
@@ -87,53 +110,83 @@ int main() {
 	if (!initGLAD())
 		return 1;
 
-	////////// LECTURE 3 //////////////
+	//// Lecture 3 starts here
 
 	static const GLfloat points[] = {
-		//X, Y, Z
-		-0.5f, -0.5f, 0.5f, //vert1
-		0.5f, -0.5f, 0.5f, //vert2
-		0.0f, 0.5f, 0.5f,
-		0.0f,-0.5f, 0.5f,
-		1.0, -0.5f, 0.5f,
-		0.5f, 0.5f, 0.5f
+		
+		-0.5f, -0.5f, 0.0f,
+	0.5f, -0.5f, 0.0f,
+		0.0f, 0.5f, 0.5,
+		
 	};
 
 	static const GLfloat colors[] = {
-		//R, G, B
-		1.0f, 0.0f, 0.0f,
-		0.0f, 1.0f, 0.0f,
-		0.0f, 0.0f, 1.0f,
 		1.0f, 0.0f, 0.0f,
 		0.0f, 1.0f, 0.0f,
 		0.0f, 0.0f, 1.0f
 	};
 
-
-	// Vertex Buffer Object - VBO
+	//VBO - Vertex buffer object
 	GLuint pos_vbo = 0;
 	glGenBuffers(1, &pos_vbo);
 	glBindBuffer(GL_ARRAY_BUFFER, pos_vbo);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(points), points, GL_STATIC_DRAW);
-	// index, size, type, normalized?, stride, pointer
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
 
 	GLuint color_vbo = 1;
 	glGenBuffers(1, &color_vbo);
 	glBindBuffer(GL_ARRAY_BUFFER, color_vbo);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(colors), colors, GL_STATIC_DRAW);
+
+	glBindBuffer(GL_ARRAY_BUFFER, pos_vbo);
+
+	//						index, size, type, normalize?, stride, pointer
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+
+	glBindBuffer(GL_ARRAY_BUFFER, color_vbo);
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, NULL);
 
-	// Enable the VBOs
+	
+
+	
 	glEnableVertexAttribArray(0);//pos
 	glEnableVertexAttribArray(1);//colors
+
+	// Load our shaders
 
 	if (!loadShaders())
 		return 1;
 
-	// GL STATES
+	////////// LECTURE 04 //////////////
+
+	// Projection - FoV, aspect ratio, near, far
+	int width, height;
+	glfwGetWindowSize(window, &width, &height);
+
+	glm::mat4 Projection = glm::perspective(glm::radians(45.0f),
+		(float)width / (float)height, 0.1f, 100.0f);
+	
+	// View matrix - Camera
+
+	glm::mat4 View = glm::lookAt(
+		glm::vec3(0, 0, 4), // camera position
+		glm::vec3(0, 0, 0), //target
+		glm::vec3(0, 1, 0) //up vector
+	);
+
+	// Model matrix
+	glm::mat4 Model = glm::mat4(1.0f);//Identity matrix - resets your matrix
+
+	glm::mat4 mvp = Projection * View * Model;
+
+	// Handle for our mvp
+	GLuint matrixMVP = glGetUniformLocation(shader_program, "MVP");
+
+
+	////////////////////////////////
+	// GL states
 	glEnable(GL_DEPTH_TEST);
 
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
 	///// Game loop /////
 	while (!glfwWindowShouldClose(window)) {
@@ -143,10 +196,25 @@ int main() {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		glUseProgram(shader_program);
-		// triangles, initial vertex, how many vertices?
-		glDrawArrays(GL_TRIANGLES, 0, 6);
+
+		////////// Lecture 04								 X,    Y,    Z	
+		Model = glm::mat4(1.0f); // reset Model
+
+		keyboard();
 
 		
+		Model = glm::rotate(Model, glm::radians(rotZ), glm::vec3(0.0f, 0.0f, 1.0f));
+		Model = glm::translate(Model, glm::vec3(0.0f, -0.5f, movZ));
+		mvp = Projection * View * Model;
+
+		// Send mvp to GPU
+		glUniformMatrix4fv(matrixMVP, 1, GL_FALSE, &mvp[0][0]);
+
+
+		/////////////////
+
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+
 		glfwSwapBuffers(window);
 	}
 	return 0;
